@@ -1,0 +1,164 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import csv
+
+# Cargar el archivo CSV con el delimitador correcto
+try:
+    df = pd.read_csv('AlarmasSistema.csv', delimiter=';', on_bad_lines='skip', quoting=csv.QUOTE_NONE, skip_blank_lines=True, encoding='utf-8')
+    print("Archivo cargado exitosamente.")
+except Exception as e:
+    print(f"Error al cargar el archivo: {e}")
+
+# Continuar con el análisis solo si el archivo se cargó correctamente
+if 'df' in locals():
+    # Verificar y limpiar los nombres de las columnas
+    df.columns = df.columns.str.strip().str.lower()  # Elimina espacios y convierte a minúsculas
+    print("Nombres de las columnas:", df.columns)
+
+    # Asegurar que las columnas de fecha/hora estén en formato datetime
+    if 'alarm_time' in df.columns and 'cancel_time' in df.columns:
+        df['alarm_time'] = pd.to_datetime(df['alarm_time'], errors='coerce')  # Convertir a datetime
+        df['cancel_time'] = pd.to_datetime(df['cancel_time'], errors='coerce')  # Manejar errores en formato de fecha
+
+        # Calcular la duración en minutos, evitando NaNs
+        df['duracion'] = (df['cancel_time'] - df['alarm_time']).dt.total_seconds() / 60
+        df['duracion'] = df['duracion'].fillna(0)  # Llenar con ceros si hay valores faltantes
+
+        # Convertir la severidad a numérico y eliminar NaNs
+        df['severity'] = pd.to_numeric(df['severity'], errors='coerce')
+        df = df.dropna(subset=['severity'])  # Eliminar filas con severidad NaN
+
+        # ===============================
+        # Gráfico de Histograma: Distribución de la severidad de las alarmas
+        plt.figure(figsize=(12, 6))  # Aumentar tamaño del gráfico
+        plt.hist(df['severity'], bins=30, color='orange', alpha=0.7, edgecolor='black')  # Cambiar el número de bins según sea necesario
+        plt.title('Distribución de la Severidad de las Alarmas')
+        plt.xlabel('Severidad')
+        plt.ylabel('Frecuencia')
+        plt.grid(axis='y')  # Añadir cuadrícula solo en el eje y
+        plt.show()
+
+        # ===============================
+        # Gráfico de Histograma: Distribución de la duración de las alarmas
+        plt.figure(figsize=(12, 6))  # Aumentar tamaño del gráfico
+        plt.hist(df['duracion'], bins=30, color='blue', alpha=0.7, edgecolor='black')  # Cambiar el número de bins según sea necesario
+        plt.title('Distribución de la Duración de las Alarmas')
+        plt.xlabel('Duración (minutos)')
+        plt.ylabel('Frecuencia')
+        plt.grid(axis='y')  # Añadir cuadrícula solo en el eje y
+        plt.show()
+
+        # ===============================
+        # Gráfico de Dispersión: Relación entre duración y severidad (con mayor zoom)
+        jitter_amount = 75  # Aumentar aún más la cantidad de jitter para separar los puntos
+        df['jittered_duracion'] = df['duracion'] + np.random.normal(0, jitter_amount, size=df['duracion'].shape)  # Aplicar jitter
+
+        plt.figure(figsize=(12, 6))  # Aumentar el tamaño de la figura
+        plt.scatter(df['jittered_duracion'], df['severity'], s=80, alpha=0.6)  # Tamaño más grande para los puntos y mayor transparencia
+        plt.title('Relación entre duración y severidad (Max Zoom)')
+        plt.xlabel('Duración (minutos)')
+        plt.ylabel('Severidad')
+
+        # Ajustar límites de los ejes para hacer más zoom
+        plt.xlim(df['jittered_duracion'].min() - 15, df['jittered_duracion'].max() + 15)  # Ajustar límite superior según sea necesario
+        plt.ylim(df['severity'].min() - 1, df['severity'].max() + 1)  # Ajustar límite superior según sea necesario
+
+        plt.grid(True)  # Agregar una cuadrícula
+        plt.show()
+
+        # ===============================
+        # Gráfico de Torta: Proporción de alarmas por severidad (al inicio)
+        if 'severity' in df.columns:
+            df['severity'].value_counts().plot(kind='pie', autopct='%1.1f%%', title='Proporción de alarmas por severidad')
+            plt.ylabel('')  # Ocultar la etiqueta del eje y
+            plt.show()
+
+        # ===============================
+        # Gráfico de Torta: Proporción de tipos de alarmas más comunes (al inicio)
+        if 'text' in df.columns:
+            tipos_comunes = df['text'].value_counts().head(10)  # Obtener los 10 tipos más comunes
+            tipos_comunes.plot(kind='pie', autopct='%1.1f%%', title='Proporción de tipos de alarmas más comunes')
+            plt.ylabel('')  # Ocultar la etiqueta del eje y
+            plt.show()
+
+        # ===============================
+        # 1. Distribución de Alarmas por Severidad
+        # ===============================
+        # Cantidad de alarmas por severidad
+        if 'severity' in df.columns:
+            severidad_count = df['severity'].value_counts()
+            print(severidad_count)
+
+            # Severidad más frecuente
+            severidad_mas_frecuente = severidad_count.idxmax()
+            print(f'Severidad más frecuente: {severidad_mas_frecuente}')
+
+            # Promedio y desviación estándar de la severidad
+            promedio_severidad = df['severity'].mean()
+            desviacion_severidad = df['severity'].std()
+            print(f'Promedio de severidad: {promedio_severidad}, Desviación estándar: {desviacion_severidad}')
+
+            # Top 5 elementos con más alarmas por severidad
+            if 'name' in df.columns:
+                top_5_elementos = df.groupby('name')['severity'].count().nlargest(5)
+                print(top_5_elementos)
+
+        # ===============================
+        # 2. Duración de las Alarmas
+        # ===============================
+        # Duración promedio de las alarmas
+        duracion_promedio = df['duracion'].mean()
+        print(f'Duración promedio de las alarmas: {duracion_promedio} minutos')
+
+        # Alarmas con mayor y menor duración
+        mayor_duracion = df.loc[df['duracion'].idxmax()]
+        menor_duracion = df.loc[df['duracion'].idxmin()]
+        print(f'Alarma con mayor duración:\n {mayor_duracion}')
+        print(f'Alarma con menor duración:\n {menor_duracion}')
+
+        # ===============================
+        # 3. Análisis Temporal de Alarmas
+        # ===============================
+        # Crear columna de hora para análisis temporal
+        df['hora'] = df['alarm_time'].dt.hour
+
+        # Cantidad de alarmas por hora
+        alarmas_por_hora = df.groupby('hora')['severity'].count()
+        alarmas_por_hora.plot(kind='line', title='Cantidad de alarmas por hora')
+        plt.xlabel('Hora del día')
+        plt.ylabel('Cantidad de alarmas')
+        plt.show()
+
+        # Comparación del comportamiento temporal por severidad
+        df.groupby(['hora', 'severity'])['severity'].count().unstack().plot(kind='line')
+        plt.title('Comportamiento temporal por severidad')
+        plt.xlabel('Hora del día')
+        plt.ylabel('Cantidad de alarmas')
+        plt.show()
+
+        # ===============================
+        # 4. Análisis de Tipos de Alarmas
+        # ===============================
+        # Tipos más comunes (columna TEXT)
+        if 'text' in df.columns:
+            tipos_comunes = df['text'].value_counts().head(5)
+            print(tipos_comunes)
+
+            # Comparación de distribución de tipos en relación con severidad (ajuste)
+            # Mostrar solo los 10 tipos de alarmas más comunes para evitar congestión en el gráfico
+            top_10_tipos = df['text'].value_counts().head(10).index
+            df_top = df[df['text'].isin(top_10_tipos)]
+
+            # Ajuste del gráfico para mejorar la visibilidad de los datos
+            plt.figure(figsize=(14, 7))  # Aumentar tamaño del gráfico
+            ax = df_top.groupby(['text', 'severity'])['severity'].count().unstack().plot(kind='bar', stacked=True, ax=plt.gca())
+            plt.title('Distribución de tipos de alarmas según severidad (Top 10)')
+            plt.xlabel('Tipo de Alarma')
+            plt.ylabel('Cantidad de alarmas')
+            plt.xticks(rotation=45, ha='right')
+            plt.legend(title='Severidad', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+            # Añadir etiquetas dentro de las barras con un umbral mínimo para evitar etiquetas solapadas o demasiado pequeñas
+            for p in ax.patches:
+                width, height = p.get_width(), p.get
